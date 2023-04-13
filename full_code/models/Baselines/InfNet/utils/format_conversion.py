@@ -91,7 +91,7 @@ if __name__ == '__main__':
     #     shutil.copyfile(os.path.join(root_path_img, name), img_save_path)
     #     shutil.copyfile(os.path.join(root_path_gt, name.replace('.jpg', '.png')), gt_save_path)
     '''
-    src = '../../Dataset/COVID-19-CT100/tr_mask_new/'
+    src = '../../Dataset/COVID-19-CT100/tr_mask/'
     save = '../../Dataset/COVID-19-CT100/edge/'
     #save_train = '/media/nercms/NERCMS/GepengJi/COVID-19/Dataset/Object-level/TrainDataset/mask_12/'
     os.makedirs(save, exist_ok=True)
@@ -103,7 +103,7 @@ if __name__ == '__main__':
 
     '''
 
-    path = '../../Dataset/COVID-19-CT100/tr_mask_new/'
+    path = '../../Dataset/COVID-19-CT100/tr_mask/'
     save = '../../Dataset/COVID-19-CT100/edge/'
     for img_name in os.listdir(path):
         img_path = path + img_name

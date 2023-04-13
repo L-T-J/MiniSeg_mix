@@ -180,7 +180,7 @@ class ToTensor(object):
         image = image.transpose((2, 0, 1))
 
         image_tensor = torch.from_numpy(image)
-        label_tensor =  torch.LongTensor(np.array(label, dtype=np.int))
+        label_tensor =  torch.LongTensor(np.array(label, dtype=np.int64))
 
         return [image_tensor, label_tensor]
 

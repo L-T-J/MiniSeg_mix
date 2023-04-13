@@ -5,7 +5,7 @@ import os
 import os.path as osp
 import torch
 import pickle
-from models import MiniSeg as net
+import MiniSeg_mix as net
 import numpy as np
 from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
@@ -359,12 +359,12 @@ if __name__ == '__main__':
     parser.add_argument('--width', type=int, default=512, help='Width of RGB image')
     parser.add_argument('--height', type=int, default=512, help='Height of RGB image')
     parser.add_argument('--max_epochs', type=int, default=80, help='Max. number of epochs')
-    parser.add_argument('--num_workers', type=int, default=5, help='No. of parallel threads')
-    parser.add_argument('--batch_size', type=int, default=5, help='Batch size')
+    parser.add_argument('--num_workers', type=int, default=0, help='No. of parallel threads')
+    parser.add_argument('--batch_size', type=int, default=1, help='Batch size')
     parser.add_argument('--step_loss', type=int, default=100, help='Decrease learning rate after how many epochs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Initial learning rate')
     parser.add_argument('--lr_mode', default='poly', help='Learning rate policy, step or poly')
-    parser.add_argument('--savedir', default='./results_MiniSeg_crossVal', help='Directory to save the results')
+    parser.add_argument('--savedir', default='./test', help='Directory to save the results')
     parser.add_argument('--resume', default=None, help='Use this checkpoint to continue training')
     parser.add_argument('--pretrained', default=None, help='Use this pretrained model for initialization')
     parser.add_argument('--classes', type=int, default=2, help='No. of classes in the dataset')

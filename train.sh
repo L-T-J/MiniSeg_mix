@@ -1,0 +1,1 @@
+python train.py --max_epochs 80 --batch_size 5 --lr 1e-3 --lr_mode poly --savedir ./results_MiniSeg_crossVal --model_name MiniSeg --data_name CT100
