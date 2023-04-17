@@ -2,4 +2,5 @@ datasets
 __pycache__
 results_MiniSeg_crossVal_mod80
 test_mod80
-output
+outputs
+testnew_mod80
