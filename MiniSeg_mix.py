@@ -105,7 +105,7 @@ class MiniSeg(nn.Module):
         self.aux = aux
 
         self.preBlock = nn.Sequential(
-            nn.Conv2d(3, 24, kernel_size=3, padding=1),
+            nn.Conv2d(3, 24, kernel_size=3, stride=4, padding=1),
             SwitchNorm2d(24, momentum=bn_momentum),
             nn.ReLU(inplace=True),
             nn.Conv2d(24, 24, kernel_size=3, padding=1),
@@ -115,16 +115,7 @@ class MiniSeg(nn.Module):
             # SwitchNorm2d(24, momentum=bn_momentum),
             # nn.ReLU(inplace=True)
         )
-        self.pred = nn.Sequential(
-            # nn.Conv2d(24, 24, kernel_size=3, padding=1),
-            # SwitchNorm2d(24, momentum=bn_momentum),
-            # nn.ReLU(inplace=True),
-            nn.Conv2d(24, 2, kernel_size=1),
-            SwitchNorm2d(2, momentum=bn_momentum),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(2, 1, kernel_size=1),
-            nn.Sigmoid()
-        )
+        
         self.long1 = DownsamplerBlock(24, 32, stride=2)
         self.down1 = ConvBlock(24, 32, stride=2)
         self.level1 = nn.ModuleList()
@@ -315,6 +306,38 @@ class MiniSeg(nn.Module):
         self.att0_2 = SN_CS_Parallel_Attention_block(F_g=24, F_x=24, F_int=self.Fint_num[3])
         self.att0_3 = SN_CS_Parallel_Attention_block(F_g=24, F_x=32, F_int=self.Fint_num[3])
         self.att0_4 = SN_CS_Parallel_Attention_block(F_g=24, F_x=64, F_int=self.Fint_num[3])
+        # output layers
+        self.out_conv1 = nn.Sequential(
+            nn.ConvTranspose2d(128, 2, kernel_size=32, stride=32),
+            # nn.Conv2d(in_channels=128,out_channels=1,kernel_size=1),
+            nn.Sigmoid()
+        )
+        self.out_conv2 = nn.Sequential(
+            nn.ConvTranspose2d(64, 2, kernel_size=16, stride=16),
+            # nn.Conv2d(in_channels=64, out_channels=1, kernel_size=1),
+            nn.Sigmoid()
+        )
+        self.out_conv3 = nn.Sequential(
+            nn.ConvTranspose2d(32, 2, kernel_size=8, stride=8),
+            # nn.Conv2d(in_channels=32,out_channels=1,kernel_size=1),
+            nn.Sigmoid()
+        )
+        self.pred = nn.Sequential(
+            nn.ConvTranspose2d(24, 2, kernel_size=4, stride=4),
+            # nn.Conv2d(in_channels=128,out_channels=1,kernel_size=1),
+            nn.Sigmoid()
+            # nn.Conv2d(24, 24, kernel_size=3, padding=1),
+            # SwitchNorm2d(24, momentum=bn_momentum),
+            # nn.ReLU(inplace=True),
+
+
+
+            # nn.Conv2d(24, 2, kernel_size=1),
+            # SwitchNorm2d(2, momentum=bn_momentum),
+            # nn.ReLU(inplace=True),
+            # nn.Conv2d(2, 1, kernel_size=1),
+            # nn.Sigmoid()
+        )
         if self.aux:
             self.pred4 = nn.Sequential(nn.Dropout2d(0.01, False), nn.Conv2d(64, classes, 1, stride=1, padding=0))
             self.pred3 = nn.Sequential(nn.Dropout2d(0.01, False), nn.Conv2d(32, classes, 1, stride=1, padding=0))
@@ -323,6 +346,7 @@ class MiniSeg(nn.Module):
 
     def forward(self, input):
         preinput = self.preBlock(input) #24
+        input_size=preinput.size()[3]
         long1 = self.long1(preinput)
         output1 = self.down1(preinput)
         output1_add = output1 + long1
@@ -409,22 +433,7 @@ class MiniSeg(nn.Module):
         # else:
         #     return (pred1, )
 
-        # output layers
-        self.out_conv1 = nn.Sequential(
-            nn.ConvTranspose2d(128, 1, kernel_size=8, stride=8),
-            # nn.Conv2d(in_channels=128,out_channels=1,kernel_size=1),
-            nn.Sigmoid()
-        )
-        self.out_conv2 = nn.Sequential(
-            nn.ConvTranspose2d(64, 1, kernel_size=4, stride=4),
-            # nn.Conv2d(in_channels=64, out_channels=1, kernel_size=1),
-            nn.Sigmoid()
-        )
-        self.out_conv3 = nn.Sequential(
-            nn.ConvTranspose2d(32, 1, kernel_size=2, stride=2),
-            # nn.Conv2d(in_channels=32,out_channels=1,kernel_size=1),
-            nn.Sigmoid()
-        )
+        
         # ============================================================================
         # Fully Connected Modules
         # ============================================================================
@@ -458,7 +467,7 @@ class MiniSeg(nn.Module):
 
         up4 = self.up4(output4)  # 128
         # up4 = self.up4(output4)
-        up4 = nn.functional.interpolate(up4, size=(96, 96), mode='nearest')
+        up4 = nn.functional.interpolate(up4, size=int(input_size/8), mode='nearest')
         deconv4 = self.deconv4(output4)
         up4_sig = up4 + deconv4
         up4 = torch.cat((up4, deconv4), dim=1)
@@ -474,7 +483,7 @@ class MiniSeg(nn.Module):
 
 
         up3 = self.up3(comb3)
-        up3 = nn.functional.interpolate(up3, size=(192, 192), mode='nearest')
+        up3 = nn.functional.interpolate(up3, size=int(input_size/4), mode='nearest')
         deconv3 = self.deconv3(comb3)
         up3_sig = up3 + deconv3
         up3 = torch.cat((up3, deconv3), dim=1)
@@ -490,7 +499,7 @@ class MiniSeg(nn.Module):
 
 
         up2 = self.up2(comb2)  # 32
-        up2 = nn.functional.interpolate(up2, size=(384, 384), mode='nearest')
+        up2 = nn.functional.interpolate(up2, size=int(input_size/2), mode='nearest')
         deconv2 = self.deconv2(comb2)
         up2_sig = up2 + deconv2
         up2 = torch.cat((up2, deconv2), dim=1)
@@ -505,7 +514,7 @@ class MiniSeg(nn.Module):
         comb1 = self.back3(gate1)  # 32
 
         up1 = self.up1(comb1)  # 24
-        up1 = nn.functional.interpolate(up1, size=(768, 768), mode='nearest')
+        up1 = nn.functional.interpolate(up1, size=int(input_size), mode='nearest')
         deconv1 = self.deconv1(comb1)
         up1_sig = up1 + deconv1
         up1 = torch.cat((up1, deconv1), dim=1)
@@ -521,5 +530,9 @@ class MiniSeg(nn.Module):
         output3 = self.out_conv1(comb3)
         output2 = self.out_conv2(comb2)
         output1 = self.out_conv3(comb1)
-        return out, output1, output2, output3  # 640, 80, 160, 320
+        pred1=out
+        pred2=output1
+        pred3=output2
+        pred4=output3
+        return pred1, pred2, pred3, pred4 # 640, 80, 160, 320
         # return out

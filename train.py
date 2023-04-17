@@ -20,23 +20,7 @@ from parallel import DataParallelModel, DataParallelCriterion
 from torch.nn.parallel.scatter_gather import gather
 import torch.nn as nn
 import torch.nn.functional as F
-
-
-class CrossEntropyLoss2d(nn.Module):
-    def __init__(self, weight=None, ignore_label=255):
-        super(CrossEntropyLoss2d, self).__init__()
-
-        self.loss = nn.NLLLoss(weight=weight, ignore_index=ignore_label)
-
-    def forward(self, *inputs):
-
-        pred1, pred2, pred3, pred4, target = tuple(inputs)
-        loss1 = self.loss(F.log_softmax(pred1, 1), target)
-        loss2 = self.loss(F.log_softmax(pred2, 1), target)
-        loss3 = self.loss(F.log_softmax(pred3, 1), target)
-        loss4 = self.loss(F.log_softmax(pred4, 1), target)
-        return 1.0*loss1 + 0.4*loss2 + 0.4*loss3 + 0.4*loss4
-
+from losses import CrossEntropyLoss2d, LBTW_Loss, WeightedDiceBCE, LBTW_algorithm
 
 
 @torch.no_grad()
@@ -85,7 +69,7 @@ def val(args, val_loader, model, criterion):
     return average_epoch_loss_val, overall_acc, per_class_acc, per_class_iu, mIOU
 
 
-def train(args, train_loader, model, criterion, optimizer, epoch, max_batches, cur_iter=0):
+def train(args, train_loader, model, criterion, optimizer, lbtw_algorithm, epoch, max_batches, cur_iter=0):
     # switch to train mode
     model.train()
     iou_eval_train = iouEval(args.classes)
@@ -103,23 +87,20 @@ def train(args, train_loader, model, criterion, optimizer, epoch, max_batches, c
             target = target.cuda()
         input_var = torch.autograd.Variable(input)
         target_var = torch.autograd.Variable(target)
-
         # run the mdoel
         output = model(input_var)
-
+        pred1, pred2, pred3, pred4 = output
         if not args.gpu or torch.cuda.device_count() <= 1:
-            pred1, pred2, pred3, pred4 = tuple(output)
-            loss = criterion(pred1, pred2, pred3, pred4, target_var)#
+            losses, loss1, loss2, loss3, loss4 = criterion(pred1, pred2, pred3, pred4, target_var)#
         else:
-            loss = criterion(output, target_var)
-
+            losses, loss1, loss2, loss3, loss4 = criterion(pred1, pred2, pred3, pred4, target_var)
+        loss, w1, w2, w3, w4 = lbtw_algorithm(iter, loss1, loss2, loss3, loss4)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         epoch_loss.append(loss.data.item())
         time_taken = time.time() - start_time
-
         # compute the confusion matrix
         if args.gpu and torch.cuda.device_count() > 1:
             output = gather(output, 0, dim=0)[0]
@@ -178,8 +159,11 @@ def main_tr(args, crossVal):
     weight = torch.from_numpy(data['classWeights']) # convert the numpy array to torch
     if args.gpu:
         weight = weight.cuda()
-
-    criteria = CrossEntropyLoss2d(weight, args.ignore_label) #weight
+    if args.loss == 'CrossEntropyLoss2d':
+        # criteria = CrossEntropyLoss2d(weight, args.ignore_label) #weight
+        criteria = LBTW_Loss(CrossEntropyLoss2d(weight, args.ignore_label))
+    elif args.loss == 'WeightedDiceBCE':
+        criteria = LBTW_Loss(WeightedDiceBCE())
     if args.gpu and torch.cuda.device_count() > 1 :
         criteria = DataParallelCriterion(criteria)
     if args.gpu:
@@ -283,6 +267,7 @@ def main_tr(args, crossVal):
     logger.flush()
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, (0.9, 0.999), eps=1e-08, weight_decay=1e-4)
+    lbtw_algorithm = LBTW_algorithm()
     maxmIOU = 0
     maxEpoch = 0
     print(args.model_name + '-CrossVal: '+str(crossVal+1))
@@ -290,14 +275,14 @@ def main_tr(args, crossVal):
         # train for one epoch
         cur_iter = 0
 
-        train(args, trainLoader_scale1, model, criteria, optimizer, epoch, max_batches, cur_iter)
+        train(args, trainLoader_scale1, model, criteria, optimizer, lbtw_algorithm, epoch, max_batches, cur_iter)
         cur_iter += len(trainLoader_scale1)
-        train(args, trainLoader_scale2, model, criteria, optimizer, epoch, max_batches, cur_iter)
+        train(args, trainLoader_scale2, model, criteria, optimizer, lbtw_algorithm, epoch, max_batches, cur_iter)
         cur_iter += len(trainLoader_scale2)
-        train(args, trainLoader_scale3, model, criteria, optimizer, epoch, max_batches, cur_iter)
+        train(args, trainLoader_scale3, model, criteria, optimizer, lbtw_algorithm, epoch, max_batches, cur_iter)
         cur_iter += len(trainLoader_scale3)
         lossTr, overall_acc_tr, per_class_acc_tr, per_class_iu_tr, mIOU_tr, lr = \
-                train(args, trainLoader, model, criteria, optimizer, epoch, max_batches, cur_iter)
+                train(args, trainLoader, model, criteria, optimizer, lbtw_algorithm, epoch, max_batches, cur_iter)
 
         # evaluate on validation set
         lossVal, overall_acc_val, per_class_acc_val, per_class_iu_val, mIOU_val = \
@@ -356,6 +341,7 @@ def main(args):
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--data_dir', default="./datasets", help='Data directory')
+    parser.add_argument('--loss', default="WeightedDiceBCE", help='loss')
     parser.add_argument('--width', type=int, default=512, help='Width of RGB image')
     parser.add_argument('--height', type=int, default=512, help='Height of RGB image')
     parser.add_argument('--max_epochs', type=int, default=80, help='Max. number of epochs')

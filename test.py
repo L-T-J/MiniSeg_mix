@@ -11,7 +11,7 @@ from collections import OrderedDict
 from IOUEval import iouEval
 from PIL import Image
 import loadData as ld
-from models import MiniSeg as net
+import MiniSeg_mix as net
 
 
 @torch.no_grad()
@@ -74,7 +74,7 @@ def main_te(args, crossVal, pretrained, mean, std):
     new_keys = []
     new_values = []
     for key, value in zip(state_dict.keys(), state_dict.values()):
-        if 'pred' not in key or 'pred1' in key:
+        if 'pred2' not in key and 'pred3' not in key and 'pred4' not in key:
             new_keys.append(key)
             new_values.append(value)
     new_dict = OrderedDict(list(zip(new_keys, new_values)))
@@ -96,7 +96,7 @@ def main_te(args, crossVal, pretrained, mean, std):
 
 def main(args):
     crossVal = 5
-    maxEpoch = [80, 80, 80, 80, 80]
+    maxEpoch = [34, 60, 60, 38, 64]
     mIOUList = []
     avgmIOU = 0
 
@@ -129,7 +129,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_name', default='CT100', help='Model name')
     parser.add_argument('--gpu', default=True, type=lambda x: (str(x).lower() == 'true'),
                         help='Run on CPU or GPU. If TRUE, then GPU')
-    parser.add_argument('--pretrained', default='./new_results_MiniSeg_crossVal_mod80/', help='Pretrained model')
+    parser.add_argument('--pretrained', default='./test_mod80/', help='Pretrained model')
     parser.add_argument('--classes', default=2, type=int, help='Number of classes in the dataset')
 
     args = parser.parse_args()
