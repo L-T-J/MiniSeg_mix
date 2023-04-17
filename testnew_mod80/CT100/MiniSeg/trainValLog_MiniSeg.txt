@@ -1,2 +1,0 @@
-Parameters: 4330878
-CrossVal	Epoch		Loss(Tr)	Loss(val)	mIOU (tr)	mIOU (val)	lr
